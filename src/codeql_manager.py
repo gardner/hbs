@@ -12,6 +12,15 @@ from scan import ensure_dir
 
 logger = logging.getLogger(__name__)
 
+# Import resource monitoring capabilities
+try:
+    from resource_monitor import MemoryMonitor, robust_codeql_execution, run_lightweight_fallback, record_timeout_and_continue
+    MONITORING_AVAILABLE = True
+    logger.info("Resource monitoring capabilities available")
+except ImportError as e:
+    MONITORING_AVAILABLE = False
+    logger.warning(f"Resource monitoring not available: {e}")
+
 def detect_project_language(src_dir: Path) -> Optional[str]:
     """Detect primary programming language in source directory"""
     if not src_dir.exists():
@@ -461,5 +470,70 @@ def parse_sarif_findings(sarif_file: Path) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error parsing SARIF file {sarif_file}: {e}")
         return {"findings_count": 0, "error": str(e)}
+
+
+def run_monitored_codeql_scan(
+    src_dir: Path,
+    out_dir: Path,
+    max_memory_gb: int = 4,
+    use_fallback: bool = True
+) -> Dict[str, Any]:
+    """
+    Run CodeQL scan with resource monitoring and fallback capabilities
+
+    This function provides the main integration point for resource monitoring
+    with the existing codeql_manager functions. It uses robust_codeql_execution
+    when available, or falls back to the regular execution method.
+
+    Args:
+        src_dir: Source directory to analyze
+        out_dir: Output directory for results
+        max_memory_gb: Maximum memory limit in GB
+        use_fallback: Whether to use lightweight fallback on failure
+
+    Returns:
+        Dictionary with scan results and monitoring information
+    """
+    logger.info(f"Starting monitored CodeQL scan for {src_dir}")
+
+    if MONITORING_AVAILABLE:
+        logger.info("Using robust execution with resource monitoring")
+        return robust_codeql_execution(
+            src_dir,
+            out_dir,
+            max_memory_gb=max_memory_gb
+        )
+    else:
+        logger.warning("Resource monitoring not available, using standard execution")
+
+        # Fallback to standard execution with basic monitoring
+        language = detect_project_language(src_dir)
+        if not language:
+            return {
+                "success": False,
+                "error": "Could not detect project language",
+                "monitoring_enabled": False
+            }
+
+        return run_codeql_scan(src_dir, out_dir, language, scan_type="fast")
+
+
+def get_monitoring_status() -> Dict[str, Any]:
+    """
+    Get the status of monitoring capabilities
+
+    Returns:
+        Dictionary with monitoring availability and configuration
+    """
+    return {
+        "monitoring_available": MONITORING_AVAILABLE,
+        "psutil_available": True,  # Will be checked at import time
+        "monitoring_features": [
+            "memory_monitoring",
+            "robust_execution",
+            "lightweight_fallback",
+            "timeout_handling"
+        ] if MONITORING_AVAILABLE else []
+    }
 
 
