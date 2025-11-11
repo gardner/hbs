@@ -15,6 +15,19 @@ from typing import Optional, Tuple
 import requests
 from tqdm import tqdm
 
+# Import CodeQL SARIF parsing
+try:
+    from src.codeql_manager import parse_sarif_findings
+except ImportError:
+    # Fallback for when src is not in path
+    sys.path.append(str(Path(__file__).parent / "src"))
+    try:
+        from codeql_manager import parse_sarif_findings
+    except ImportError:
+        # If still not available, define a stub function
+        def parse_sarif_findings(sarif_file):
+            return {"findings_count": 0, "error": "SARIF parsing not available"}
+
 
 API_FORMULA = "https://formulae.brew.sh/api/formula/{name}.json"
 
@@ -270,15 +283,26 @@ def run_codeql(src_dir: Path, out_dir: Path):
         result = run_fast_codeql_scan(src_dir, out_dir)
 
         if result["success"]:
+            # Parse SARIF file to get actual findings count
+            output_file = result.get("output_file")
+            findings_data = {"findings_count": 0}
+
+            if output_file:
+                sarif_file = Path(output_file)
+                findings_data = parse_sarif_findings(sarif_file)
+
             # Convert SARIF to our JSON format
             scan_results = {
                 "scanner": "codeql",
                 "scan_type": result["scan_type"],
                 "success": True,
-                "output_file": result.get("output_file"),
+                "output_file": output_file,
                 "execution_time": result.get("execution_time", 0),
                 "database_path": result.get("database_path"),
-                "findings_count": 0  # Would parse SARIF to count findings
+                "findings_count": findings_data.get("findings_count", 0),
+                "sarif_parsing_error": findings_data.get("error"),
+                "severity_breakdown": findings_data.get("severity_breakdown"),
+                "rule_breakdown": findings_data.get("rule_breakdown")
             }
 
             out.write_text(json.dumps(scan_results, indent=2), encoding="utf-8")

@@ -10,4 +10,5 @@ dependencies = [
     "semgrep>=1.142.1",
     "tqdm>=4.67.1",
     "psutil>=5.9.0",
+    "pytest>=7.0.0",
 ]

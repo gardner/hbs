@@ -1,11 +1,14 @@
 import subprocess
 import shutil
 import time
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 import os
 import logging
 import json
+sys.path.append(str(Path(__file__).parent.parent))
+from scan import ensure_dir
 
 logger = logging.getLogger(__name__)
 
@@ -214,23 +217,39 @@ def run_codeql_scan(
             }
 
         # Select queries based on scan type and language
+        # Comprehensive language-to-query mapping
+        language_query_map = {
+            "cpp": "codeql/cpp-queries",
+            "python": "codeql/python-queries",
+            "javascript": "codeql/javascript-queries",
+            "java": "codeql/java-queries",
+            "go": "codeql/go-queries",
+            "ruby": "codeql/ruby-queries",
+            "c": "codeql/cpp-queries",  # C uses C++ queries
+            "objc": "codeql/objc-queries",
+        }
+
         if scan_type == "fast":
-            if language == "cpp":
-                queries = ["codeql/cpp-queries"]
-            elif language == "python":
-                queries = ["codeql/python-queries"]
-            elif language == "javascript":
-                queries = ["codeql/javascript-queries"]
+            # Use language-specific queries for best performance and relevance
+            if language in language_query_map:
+                queries = [language_query_map[language]]
             else:
+                # Fallback to general security queries for unknown languages
+                logger.warning(f"Unknown language '{language}', using general security queries")
                 queries = ["codeql/security-extended"]
         else:  # comprehensive
-            if language == "cpp":
-                queries = ["codeql/cpp-queries", "codeql/security-extended"]
-            elif language == "python":
-                queries = ["codeql/python-queries", "codeql/security-extended"]
-            elif language == "javascript":
-                queries = ["codeql/javascript-queries", "codeql/security-extended"]
+            if language in language_query_map:
+                # Combine language-specific with general security queries
+                queries = [
+                    language_query_map[language],
+                    "codeql/security-extended"
+                ]
+                # Add additional queries for popular languages
+                if language in ["cpp", "python", "java"]:
+                    queries.append("codeql/queries")
             else:
+                # Fallback for unknown languages
+                logger.warning(f"Unknown language '{language}', using comprehensive general queries")
                 queries = ["codeql/security-extended", "codeql/queries"]
 
         # Execute queries
@@ -306,6 +325,24 @@ def execute_queries_with_limits(
     """
     Execute CodeQL queries with resource limits and monitoring
     """
+    # Input validation
+    if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
+        raise ValueError(f"timeout_seconds must be a positive integer, got: {timeout_seconds}")
+
+    if timeout_seconds > 7200:  # Max 2 hours
+        logger.warning(f"Very long timeout specified: {timeout_seconds}s. Limiting to 7200s")
+        timeout_seconds = 7200
+
+    if not isinstance(max_memory_gb, int) or max_memory_gb <= 0:
+        raise ValueError(f"max_memory_gb must be a positive integer, got: {max_memory_gb}")
+
+    if max_memory_gb > 16:  # Max 16GB
+        logger.warning(f"Very high memory limit specified: {max_memory_gb}GB. Limiting to 16GB")
+        max_memory_gb = 16
+
+    if not queries:
+        raise ValueError("queries list cannot be empty")
+
     try:
         logger.info(f"Executing {len(queries)} query packs against {db_dir}")
 
@@ -372,7 +409,57 @@ def execute_queries_with_limits(
         return {"success": False, "error": error_msg}
 
 
-def ensure_dir(path: Path) -> Path:
-    """Ensure directory exists"""
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+def parse_sarif_findings(sarif_file: Path) -> Dict[str, Any]:
+    """
+    Parse SARIF output file and count findings
+
+    Args:
+        sarif_file: Path to SARIF output file
+
+    Returns:
+        Dictionary with findings count and summary information
+    """
+    try:
+        if not sarif_file.exists():
+            return {"findings_count": 0, "error": "SARIF file does not exist"}
+
+        if sarif_file.stat().st_size == 0:
+            return {"findings_count": 0, "error": "SARIF file is empty"}
+
+        with open(sarif_file, 'r', encoding='utf-8') as f:
+            sarif_data = json.load(f)
+
+        # Extract results from SARIF
+        results = sarif_data.get('runs', [])
+        total_findings = 0
+        severity_counts = {}
+        rule_counts = {}
+
+        for run in results:
+            run_results = run.get('results', [])
+            total_findings += len(run_results)
+
+            for result in run_results:
+                # Count by severity
+                level = result.get('level', 'note')
+                severity_counts[level] = severity_counts.get(level, 0) + 1
+
+                # Count by rule
+                rule_id = result.get('rule', {}).get('id', 'unknown')
+                rule_counts[rule_id] = rule_counts.get(rule_id, 0) + 1
+
+        return {
+            "findings_count": total_findings,
+            "severity_breakdown": severity_counts,
+            "rule_breakdown": rule_counts,
+            "file_size": sarif_file.stat().st_size
+        }
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in SARIF file {sarif_file}: {e}")
+        return {"findings_count": 0, "error": f"Invalid JSON: {e}"}
+    except Exception as e:
+        logger.error(f"Error parsing SARIF file {sarif_file}: {e}")
+        return {"findings_count": 0, "error": str(e)}
+
+
