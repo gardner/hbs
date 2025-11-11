@@ -78,3 +78,13 @@ The project is designed to run exclusively in Docker. Local testing requires:
 - All security tools installed (ClamAV, YARA, etc.)
 - Proper directory permissions
 - Network access for downloads
+
+# Remember
+
+Never use conda or miniconda
+Never use `pip install <dependency>`
+Never use `python3 pip install <dependency>`
+
+ALWAYS USE `uv add <dependency>`
+
+Please do use the `context7` tool to find docs for different libraries and tools.
