@@ -195,6 +195,15 @@ def gather_sources(meta: dict) -> Optional[Tuple[str, Optional[str]]]:
 # Scanners
 # --------------------------
 
+# Import CodeQL manager functions
+try:
+    from src.codeql_manager import run_fast_codeql_scan, run_codeql_scan
+except ImportError:
+    # Fallback if src module not available in current environment
+    run_fast_codeql_scan = None
+    run_codeql_scan = None
+
+
 def detect_python(src_dir: Path) -> bool:
     for root, _, files in os.walk(src_dir):
         for fn in files:
@@ -205,7 +214,7 @@ def detect_python(src_dir: Path) -> bool:
 
 def run_semgrep(src_dir: Path, out_dir: Path):
     out = ensure_dir(out_dir) / "semgrep.json"
-    cmd = f"semgrep --quiet --config=p/owasp-top-ten --json --no-git --timeout=120 {shlex(src_dir)}"
+    cmd = f"semgrep --quiet --config=p/owasp-top-ten --json --no-git-ignore --timeout=120 {shlex(src_dir)}"
     res = sh(cmd, capture=True)
     out.write_text(res.stdout, encoding="utf-8")
 
@@ -238,6 +247,62 @@ def run_yara(bin_dir: Path, out_dir: Path, rules_dir: Path):
     cmd = f"yara -r {shlex(rules_dir)} {shlex(bin_dir)}"
     res = sh(cmd, capture=True, check=False)
     out.write_text(res.stdout, encoding="utf-8")
+
+
+def run_codeql(src_dir: Path, out_dir: Path):
+    """Run CodeQL security analysis"""
+    out = ensure_dir(out_dir) / "codeql_results.json"
+
+    try:
+        if run_fast_codeql_scan is None:
+            # CodeQL manager not available, skip scan
+            error_results = {
+                "scanner": "codeql",
+                "success": False,
+                "error": "CodeQL manager not available",
+                "scan_type": "unknown"
+            }
+            out.write_text(json.dumps(error_results, indent=2), encoding="utf-8")
+            print("[CodeQL] CodeQL manager not available, skipping scan")
+            return
+
+        print("[CodeQL] Running fast security scan...")
+        result = run_fast_codeql_scan(src_dir, out_dir)
+
+        if result["success"]:
+            # Convert SARIF to our JSON format
+            scan_results = {
+                "scanner": "codeql",
+                "scan_type": result["scan_type"],
+                "success": True,
+                "output_file": result.get("output_file"),
+                "execution_time": result.get("execution_time", 0),
+                "database_path": result.get("database_path"),
+                "findings_count": 0  # Would parse SARIF to count findings
+            }
+
+            out.write_text(json.dumps(scan_results, indent=2), encoding="utf-8")
+            print("[CodeQL] Scan completed successfully")
+
+        else:
+            error_results = {
+                "scanner": "codeql",
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "scan_type": result.get("scan_type", "unknown")
+            }
+            out.write_text(json.dumps(error_results, indent=2), encoding="utf-8")
+            print(f"[CodeQL] Scan failed: {result.get('error')}")
+
+    except Exception as e:
+        error_results = {
+            "scanner": "codeql",
+            "success": False,
+            "error": str(e),
+            "scan_type": "unknown"
+        }
+        out.write_text(json.dumps(error_results, indent=2), encoding="utf-8")
+        print(f"[CodeQL] Scan failed with exception: {e}")
 
 
 def list_binaries(root: Path):
@@ -364,6 +429,11 @@ def main():
                 run_bandit(src_dir, rep_dir / "static")
             except Exception as e:
                 print(f"[{name}] Bandit failed: {e}")
+            print(f"[{name}] Running CodeQL...")
+            try:
+                run_codeql(src_dir, rep_dir / "static")
+            except Exception as e:
+                print(f"[{name}] CodeQL failed: {e}")
         else:
             print(f"[{name}] Skipping static scans (no extracted source).")
 
