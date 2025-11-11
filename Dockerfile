@@ -8,12 +8,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     LANG=C.UTF-8
 
-# Base deps + security tools
+# Base deps + security tools + monitoring tools
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt update && apt-get --no-install-recommends install -y \
     curl ca-certificates jq git unzip tar xz-utils gzip \
-    clamav clamav-daemon clamav-freshclam yara file gosu
+    clamav clamav-daemon clamav-freshclam yara file gosu \
+    procps htop time
 
 # Install gitleaks (static binary)
 ENV GITLEAKS_VERSION=8.29.0
@@ -43,8 +44,8 @@ RUN freshclam
 
 WORKDIR /app
 
-# Create workspace + unprivileged user
-RUN useradd -m scanner && mkdir -p /work && chown -R scanner:scanner /work /app
+# Create workspace + CodeQL work directory + unprivileged user
+RUN useradd -m scanner && mkdir -p /work /tmp/codeql_work && chown -R scanner:scanner /work /app /tmp/codeql_work
 USER scanner
 
 # Rule files, scripts, app
@@ -55,6 +56,7 @@ ENV PATH=/home/scanner/.local/bin:$PATH
 
 
 COPY --chown=scanner:scanner rules/ rules/
+COPY --chown=scanner:scanner config/ config/
 COPY --chown=scanner:scanner scan.py entrypoint.sh run_scans.sh dlcodeql.sh ./
 RUN chmod +x entrypoint.sh run_scans.sh dlcodeql.sh
 
