@@ -1,0 +1,19 @@
+{
+  "resource_limits": {
+    "max_memory_gb": 6,
+    "max_cpu_threads": 2,
+    "default_timeout_seconds": 1800,
+    "database_size_limit_mb": 1000
+  },
+  "profiling": {
+    "min_memory_mb": 100,
+    "max_timeout_seconds": 3600,
+    "base_timeout_seconds": 300,
+    "additional_timeout_per_10mb_mb": 60
+  },
+  "monitoring": {
+    "sampling_interval_ms": 500,
+    "memory_alert_threshold": 0.8,
+    "cpu_alert_threshold": 0.9
+  }
+}
