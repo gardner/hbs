@@ -15,28 +15,28 @@ if [ -f "/app/config/codeql_config.json" ]; then
   echo "[entrypoint] Loading CodeQL configuration..."
 
   # Extract resource limits from config
-  MAX_MEMORY_GB=$(python3 -c "
+  MAX_MEMORY_GB=$(uv run python3 -c "
 import json
 with open('/app/config/codeql_config.json') as f:
     config = json.load(f)
 print(config['resource_limits']['max_memory_gb'])
 ")
 
-  MAX_THREADS=$(python3 -c "
+  MAX_THREADS=$(uv run python3 -c "
 import json
 with open('/app/config/codeql_config.json') as f:
     config = json.load(f)
 print(config['resource_limits']['max_cpu_threads'])
 ")
 
-  TIMEOUT=$(python3 -c "
+  TIMEOUT=$(uv run python3 -c "
 import json
 with open('/app/config/codeql_config.json') as f:
     config = json.load(f)
 print(config['resource_limits']['default_timeout_seconds'])
 ")
 
-  MAX_DB_SIZE=$(python3 -c "
+  MAX_DB_SIZE=$(uv run python3 -c "
 import json
 with open('/app/config/codeql_config.json') as f:
     config = json.load(f)
@@ -52,7 +52,7 @@ else
 fi
 
 # Calculate dynamic memory allocation (80% of available memory)
-AVAILABLE_MEMORY_GB=$(python3 -c "
+AVAILABLE_MEMORY_GB=$(uv run python3 -c "
 try:
     import psutil
     memory_gb = psutil.virtual_memory().total // (1024**3)
@@ -64,10 +64,10 @@ except Exception:
 ")
 
 # Use the minimum of configured max and available memory
-CODEQL_MEMORY_GB=$(python3 -c "print(min($AVAILABLE_MEMORY_GB, $MAX_MEMORY_GB))")
+CODEQL_MEMORY_GB=$(uv run python3 -c "print(min($AVAILABLE_MEMORY_GB, $MAX_MEMORY_GB))")
 
 # Detect CPU cores for thread allocation
-AVAILABLE_THREADS=$(python3 -c "
+AVAILABLE_THREADS=$(uv run python3 -c "
 try:
     import psutil
     print(psutil.cpu_count())
@@ -78,7 +78,7 @@ except Exception:
 ")
 
 # Use the minimum of configured max and available threads
-CODEQL_THREADS=$(python3 -c "print(min($AVAILABLE_THREADS, $MAX_THREADS))")
+CODEQL_THREADS=$(uv run python3 -c "print(min($AVAILABLE_THREADS, $MAX_THREADS))")
 
 # Set environment variables
 export CODEQL_RAM="${CODEQL_MEMORY_GB}"

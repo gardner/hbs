@@ -227,13 +227,26 @@ def detect_python(src_dir: Path) -> bool:
 
 def run_semgrep(src_dir: Path, out_dir: Path):
     out = ensure_dir(out_dir) / "semgrep.json"
-    cmd = f"semgrep --quiet --config=p/owasp-top-ten --json --no-git-ignore --timeout=120 {shlex(src_dir)}"
+    cmd = f"semgrep --quiet --config=p/owasp-top-ten --json --no-git-ignore --timeout=120 --metrics=off {shlex(src_dir)}"
     res = sh(cmd, capture=True)
     out.write_text(res.stdout, encoding="utf-8")
 
 
 def run_gitleaks(src_dir: Path, out_dir: Path):
     out = ensure_dir(out_dir) / "gitleaks.json"
+
+    # Check if this is a git repository
+    if not (src_dir / ".git").exists():
+        # Initialize git repository for gitleaks scanning
+        try:
+            sh(f"cd {shlex(src_dir)} && git init", check=False)
+            sh(f"cd {shlex(src_dir)} && git config user.email 'scanner@hbs.local' && git config user.name 'HBS Scanner'", check=False)
+            sh(f"cd {shlex(src_dir)} && git add . && git commit -m 'Initial commit for security scanning'", check=False)
+        except Exception as e:
+            # If git initialization fails, skip gitleaks
+            out.write_text(json.dumps({"skipped": f"not_a_git_repo_init_error: {str(e)}"}), encoding="utf-8")
+            return
+
     cmd = f"gitleaks detect -s {shlex(src_dir)} -f json -r {shlex(out)} --no-banner --exit-code 0"
     sh(cmd, check=False)
 

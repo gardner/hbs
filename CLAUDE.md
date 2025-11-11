@@ -18,13 +18,13 @@ HBS (Homebrew Scanner) is a single-node Podman container that performs security 
 ### Building and Running
 ```bash
 # Build container
-podman build -t hbs:latest .
+docker build -t hbs:latest .
 
 # Run single formula scan
-podman run --rm -v "$PWD/out:/work" hbs:latest --formula zstd
+docker run --rm -v "$PWD/out:/work" hbs:latest --formula zstd
 
 # Run multiple formulae from file
-podman run --rm -v "$PWD/out:/work" hbs:latest --formula-file /app/example.list --os x86_64_linux
+docker run --rm -v "$PWD/out:/work" hbs:latest --formula-file /app/example.list --os x86_64_linux
 ```
 
 ### Local Development

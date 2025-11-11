@@ -48,6 +48,8 @@ WORKDIR /app
 RUN useradd -m scanner && mkdir -p /work /tmp/codeql_work && chown -R scanner:scanner /work /app /tmp/codeql_work
 USER scanner
 
+RUN codeql pack download codeql/cpp-queries codeql/python-queries codeql/javascript-queries codeql/java-queries codeql/csharp-queries codeql/go-queries codeql/ruby-queries
+
 # Rule files, scripts, app
 COPY --chown=scanner:scanner pyproject.toml uv.lock .
 RUN uv sync
@@ -60,12 +62,10 @@ COPY --chown=scanner:scanner config/ config/
 COPY --chown=scanner:scanner scan.py entrypoint.sh run_scans.sh dlcodeql.sh ./
 RUN chmod +x entrypoint.sh run_scans.sh dlcodeql.sh
 
-RUN codeql pack download codeql/cpp-queries codeql/python-queries codeql/javascript-queries codeql/java-queries codeql/csharp-queries codeql/go-queries codeql/ruby-queries
-
 VOLUME ["/work"]  # reports/cache live here
 
 ENTRYPOINT ["./entrypoint.sh"]
 
 USER root
 
-# podman run --rm -v "$PWD/out:/work" hbs:latest --formula zstd
+# docker run --rm -v "$PWD/out:/work" hbs:latest --formula zstd

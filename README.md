@@ -9,7 +9,7 @@ No P2P, no coordination—just fetch → scan → write reports.
 ## Build
 
 ```bash
-podman --platform=linux/amd64 build -t hbs:latest .
+docker build --platform=linux/amd64 -t hbs:latest .
 ````
 
 ## Run
@@ -18,13 +18,13 @@ Mount a local output dir to collect reports (recommended):
 
 ```bash
 mkdir -p out
-podman run --platform=linux/amd64 --rm -v "$PWD/out:/work" hbs:latest --formula zstd
+docker run --platform=linux/amd64 --rm -v "$PWD/out:/work" hbs:latest --formula zstd
 ```
 
 Multiple formulae via a file:
 
 ```bash
-podman run --platform=linux/amd64 --rm -v "$PWD/out:/work" hbs:latest \
+docker run --platform=linux/amd64 --rm -v "$PWD/out:/work" hbs:latest \
   --formula-file /app/example.list \
   --os x86_64_linux
 ```
@@ -58,7 +58,7 @@ A `manifest.json` summarizes what was scanned.
 
 ```bash
 printf "zstd\nwget\njq\n" > example.list
-podman run --platform=linux/amd64 --rm -v "$PWD/out:/work" hbs:latest --formula-file /app/example.list
+docker run --platform=linux/amd64 --rm -v "$PWD/out:/work" hbs:latest --formula-file /app/example.list
 ```
 
 Reports end up in `./out/<formula>/reports`.
