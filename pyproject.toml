@@ -1,0 +1,12 @@
+[project]
+name = "hbs"
+version = "0.1.0"
+description = "homebrew scanner"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "bandit>=1.8.6",
+    "requests>=2.32.5",
+    "semgrep>=1.142.1",
+    "tqdm>=4.67.1",
+]

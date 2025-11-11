@@ -1,0 +1,4 @@
+# One formula name per line (comments allowed)
+zstd
+wget
+jq
