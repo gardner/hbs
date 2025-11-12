@@ -61,3 +61,7 @@ docker run --platform=linux/amd64 --rm -v "$PWD/out:/work" hbs:latest --formula-
 
 Reports end up in `./out/<formula>/reports`.
 
+## Coming soon!
+
+* SARIF 2.1.0 support
+
