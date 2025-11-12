@@ -1,10 +1,8 @@
 # HBS Single-Node Scanner (Homebrew)
 
-A single Podman container that iteratively scans Homebrew formulae with:
+A single Docker container that iteratively scans Homebrew formulae with:
 - **Static code**: Semgrep, Gitleaks, Bandit (skips bandit if no Python files)
 - **Binary/bottle**: ClamAV, YARA (simple rules included), radare2/rabin2 inventory
-
-No P2P, no coordination—just fetch → scan → write reports.
 
 ## Build
 
