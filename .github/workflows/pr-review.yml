@@ -23,16 +23,6 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          settings: |
-            {
-              "env": {
-                "ANTHROPIC_BASE_URL": "${{ secrets.ANTHROPIC_BASE_URL }}",
-                "ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}",
-                "ANTHROPIC_AUTH_TOKEN": "${{ secrets.ANTHROPIC_AUTH_TOKEN }}",
-                "API_TIMEOUT_MS": "3000000"
-              }
-            }
-
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
