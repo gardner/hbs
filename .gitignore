@@ -16,4 +16,6 @@ work/
 out/
 reports/
 .env
+.pytest_cache/
+
 

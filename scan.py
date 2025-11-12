@@ -227,7 +227,7 @@ def detect_python(src_dir: Path) -> bool:
 
 def run_semgrep(src_dir: Path, out_dir: Path):
     out = ensure_dir(out_dir) / "semgrep.json"
-    cmd = f"semgrep --quiet --config=p/owasp-top-ten --json --no-git-ignore --timeout=120 --metrics=off {shlex(src_dir)}"
+    cmd = f"semgrep --config=p/owasp-top-ten --json-output={out} --no-git-ignore --timeout=120 --metrics=off {shlex(src_dir)}"
     res = sh(cmd, capture=True)
     out.write_text(res.stdout, encoding="utf-8")
 
