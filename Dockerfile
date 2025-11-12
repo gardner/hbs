@@ -8,12 +8,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     LANG=C.UTF-8
 
-# Base deps + security tools
+# Base deps + security tools + monitoring tools
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt update && apt-get --no-install-recommends install -y \
     curl ca-certificates jq git unzip tar xz-utils gzip \
-    clamav clamav-daemon clamav-freshclam yara file gosu
+    clamav clamav-daemon clamav-freshclam yara file gosu \
+    procps htop time
 
 # Install gitleaks (static binary)
 ENV GITLEAKS_VERSION=8.29.0
@@ -43,27 +44,30 @@ RUN freshclam
 
 WORKDIR /app
 
-# Create workspace + unprivileged user
-RUN useradd -m scanner && mkdir -p /work && chown -R scanner:scanner /work /app
+# Create workspace + CodeQL work directory + unprivileged user
+RUN useradd -m scanner && mkdir -p /work /tmp/codeql_work && chown -R scanner:scanner /work /app /tmp/codeql_work
 USER scanner
 
+RUN codeql pack download codeql/cpp-queries codeql/python-queries codeql/javascript-queries codeql/java-queries codeql/csharp-queries codeql/go-queries codeql/ruby-queries
+
 # Rule files, scripts, app
-COPY --chown=scanner:scanner pyproject.toml uv.lock .
+COPY --chown=scanner:scanner pyproject.toml uv.lock /app/
 RUN uv sync
 
 ENV PATH=/home/scanner/.local/bin:$PATH
 
 
 COPY --chown=scanner:scanner rules/ rules/
+COPY --chown=scanner:scanner config/ config/
 COPY --chown=scanner:scanner scan.py entrypoint.sh run_scans.sh dlcodeql.sh ./
 RUN chmod +x entrypoint.sh run_scans.sh dlcodeql.sh
 
-RUN codeql pack download codeql/cpp-queries codeql/python-queries codeql/javascript-queries codeql/java-queries codeql/csharp-queries codeql/go-queries codeql/ruby-queries
-
 VOLUME ["/work"]  # reports/cache live here
 
-ENTRYPOINT ["./entrypoint.sh"]
+# ENTRYPOINT ["./entrypoint.sh"]
 
 USER root
 
-# podman run --rm -v "$PWD/out:/work" hbs:latest --formula zstd
+CMD /bin/bash
+
+# docker run --rm -v "$PWD/out:/work" hbs:latest --formula zstd

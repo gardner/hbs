@@ -1,0 +1,48 @@
+{
+  "resource_limits": {
+    "max_memory_gb": 6,
+    "max_cpu_threads": 2,
+    "default_timeout_seconds": 1800,
+    "database_size_limit_mb": 1000
+  },
+  "default_queries": {
+    "fast_scan": [
+      "cpp/security-and-quality",
+      "python/security-and-quality",
+      "javascript/security-and-quality",
+      "java/security-and-quality",
+      "go/security-and-quality",
+      "csharp/security-and-quality",
+      "ruby/security-and-quality"
+    ],
+    "comprehensive_scan": [
+      "cpp/security-and-quality",
+      "cpp/codeql-std-all",
+      "python/security-and-quality",
+      "python/codeql-std-all",
+      "javascript/security-and-quality",
+      "javascript/codeql-std-all",
+      "java/security-and-quality",
+      "java/codeql-std-all",
+      "go/security-and-quality",
+      "go/codeql-std-all",
+      "csharp/security-and-quality",
+      "csharp/codeql-std-all",
+      "ruby/security-and-quality",
+      "ruby/codeql-std-all"
+    ]
+  },
+  "monitoring": {
+    "enable_profiling": true,
+    "enable_resource_monitoring": true,
+    "log_level": "INFO",
+    "work_directory": "/tmp/codeql_work",
+    "cleanup_temp_files": true
+  },
+  "environment": {
+    "CODEQL_RAM": "auto",
+    "CODEQL_THREADS": "auto",
+    "CODEQL_TIMEOUT": "1800",
+    "CODEQL_MAX_DB_SIZE": "1000"
+  }
+}

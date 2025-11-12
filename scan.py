@@ -15,6 +15,19 @@ from typing import Optional, Tuple
 import requests
 from tqdm import tqdm
 
+# Import CodeQL SARIF parsing
+try:
+    from src.codeql_manager import parse_sarif_findings
+except ImportError:
+    # Fallback for when src is not in path
+    sys.path.append(str(Path(__file__).parent / "src"))
+    try:
+        from codeql_manager import parse_sarif_findings
+    except ImportError:
+        # If still not available, define a stub function
+        def parse_sarif_findings(sarif_file):
+            return {"findings_count": 0, "error": "SARIF parsing not available"}
+
 
 API_FORMULA = "https://formulae.brew.sh/api/formula/{name}.json"
 
@@ -195,6 +208,15 @@ def gather_sources(meta: dict) -> Optional[Tuple[str, Optional[str]]]:
 # Scanners
 # --------------------------
 
+# Import CodeQL manager functions
+try:
+    from src.codeql_manager import run_fast_codeql_scan, run_codeql_scan
+except ImportError:
+    # Fallback if src module not available in current environment
+    run_fast_codeql_scan = None
+    run_codeql_scan = None
+
+
 def detect_python(src_dir: Path) -> bool:
     for root, _, files in os.walk(src_dir):
         for fn in files:
@@ -205,13 +227,26 @@ def detect_python(src_dir: Path) -> bool:
 
 def run_semgrep(src_dir: Path, out_dir: Path):
     out = ensure_dir(out_dir) / "semgrep.json"
-    cmd = f"semgrep --quiet --config=p/owasp-top-ten --json --no-git --timeout=120 {shlex(src_dir)}"
+    cmd = f"semgrep --config=p/owasp-top-ten --json-output={out} --no-git-ignore --timeout=120 --metrics=off {shlex(src_dir)}"
     res = sh(cmd, capture=True)
     out.write_text(res.stdout, encoding="utf-8")
 
 
 def run_gitleaks(src_dir: Path, out_dir: Path):
     out = ensure_dir(out_dir) / "gitleaks.json"
+
+    # Check if this is a git repository
+    if not (src_dir / ".git").exists():
+        # Initialize git repository for gitleaks scanning
+        try:
+            sh(f"cd {shlex(src_dir)} && git init", check=False)
+            sh(f"cd {shlex(src_dir)} && git config user.email 'scanner@hbs.local' && git config user.name 'HBS Scanner'", check=False)
+            sh(f"cd {shlex(src_dir)} && git add . && git commit -m 'Initial commit for security scanning'", check=False)
+        except Exception as e:
+            # If git initialization fails, skip gitleaks
+            out.write_text(json.dumps({"skipped": f"not_a_git_repo_init_error: {str(e)}"}), encoding="utf-8")
+            return
+
     cmd = f"gitleaks detect -s {shlex(src_dir)} -f json -r {shlex(out)} --no-banner --exit-code 0"
     sh(cmd, check=False)
 
@@ -238,6 +273,73 @@ def run_yara(bin_dir: Path, out_dir: Path, rules_dir: Path):
     cmd = f"yara -r {shlex(rules_dir)} {shlex(bin_dir)}"
     res = sh(cmd, capture=True, check=False)
     out.write_text(res.stdout, encoding="utf-8")
+
+
+def run_codeql(src_dir: Path, out_dir: Path):
+    """Run CodeQL security analysis"""
+    out = ensure_dir(out_dir) / "codeql_results.json"
+
+    try:
+        if run_fast_codeql_scan is None:
+            # CodeQL manager not available, skip scan
+            error_results = {
+                "scanner": "codeql",
+                "success": False,
+                "error": "CodeQL manager not available",
+                "scan_type": "unknown"
+            }
+            out.write_text(json.dumps(error_results, indent=2), encoding="utf-8")
+            print("[CodeQL] CodeQL manager not available, skipping scan")
+            return
+
+        print("[CodeQL] Running fast security scan...")
+        result = run_fast_codeql_scan(src_dir, out_dir)
+
+        if result["success"]:
+            # Parse SARIF file to get actual findings count
+            output_file = result.get("output_file")
+            findings_data = {"findings_count": 0}
+
+            if output_file:
+                sarif_file = Path(output_file)
+                findings_data = parse_sarif_findings(sarif_file)
+
+            # Convert SARIF to our JSON format
+            scan_results = {
+                "scanner": "codeql",
+                "scan_type": result["scan_type"],
+                "success": True,
+                "output_file": output_file,
+                "execution_time": result.get("execution_time", 0),
+                "database_path": result.get("database_path"),
+                "findings_count": findings_data.get("findings_count", 0),
+                "sarif_parsing_error": findings_data.get("error"),
+                "severity_breakdown": findings_data.get("severity_breakdown"),
+                "rule_breakdown": findings_data.get("rule_breakdown")
+            }
+
+            out.write_text(json.dumps(scan_results, indent=2), encoding="utf-8")
+            print("[CodeQL] Scan completed successfully")
+
+        else:
+            error_results = {
+                "scanner": "codeql",
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "scan_type": result.get("scan_type", "unknown")
+            }
+            out.write_text(json.dumps(error_results, indent=2), encoding="utf-8")
+            print(f"[CodeQL] Scan failed: {result.get('error')}")
+
+    except Exception as e:
+        error_results = {
+            "scanner": "codeql",
+            "success": False,
+            "error": str(e),
+            "scan_type": "unknown"
+        }
+        out.write_text(json.dumps(error_results, indent=2), encoding="utf-8")
+        print(f"[CodeQL] Scan failed with exception: {e}")
 
 
 def list_binaries(root: Path):
@@ -364,6 +466,11 @@ def main():
                 run_bandit(src_dir, rep_dir / "static")
             except Exception as e:
                 print(f"[{name}] Bandit failed: {e}")
+            print(f"[{name}] Running CodeQL...")
+            try:
+                run_codeql(src_dir, rep_dir / "static")
+            except Exception as e:
+                print(f"[{name}] CodeQL failed: {e}")
         else:
             print(f"[{name}] Skipping static scans (no extracted source).")
 
